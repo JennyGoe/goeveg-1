@@ -45,64 +45,79 @@
 #' @export
 
 
-ordiselect <-  function(matrix, ord, ablim = 1, fitlim = 1, choices = c(1,2), method = "axes", env, freq = FALSE) {
+ordiselect <-  function(matrix, ord, ablim = 1, fitlim = 1, choices = c(1,2), method = "axes", env, p.max = 0.05, freq = FALSE) {
   if(!is.data.frame(matrix)) {
     matrix <- data.frame(matrix)
   }
-
+  
   if(freq == F) {
     abund <- apply(matrix, 2, sum)
-    } else {
+  } else {
     abund <- apply(matrix>0, 2, sum)
-    }
-
+  }
+  
   if(method == "axes") {
-
+    
     scores <- data.frame(scores(ord, display="species", choices=choices))
     scores1 <- scores[,1]
     scores2 <- scores[,2]
-
+    
     rownames(scores[abund >= quantile(abund, 1 - ablim) &
-                    (scores1 >= quantile(scores1, 1-0.5*fitlim) |
-                       scores1 <= quantile(scores1,0.5*fitlim) |
-                       scores2 >= quantile(scores2, 1-0.5*fitlim) |
-                       scores2 <= quantile(scores2,0.5*fitlim))
-                  ,])
-
-    }  else if(method=="vars") {
-
-      if(class(env) != "envfit") {
-        print("FATAL: Fitted environmental variables are no result of envfit()")
-      } else {
-
+                      (scores1 >= quantile(scores1, 1-0.5*fitlim, na.rm=T) |
+                         scores1 <= quantile(scores1,0.5*fitlim, na.rm=T) |
+                         scores2 >= quantile(scores2, 1-0.5*fitlim, na.rm=T) |
+                         scores2 <= quantile(scores2,0.5*fitlim, na.rm=T))
+                    ,])
+    
+  }  else if(method=="vars") {
+    
+    if(class(env) != "envfit") {
+      print("FATAL: Fitted environmental variables are no result of envfit()")
+    } else if(ablim == 1) {
+      
+      stop("Calculation of best fitting species only with argument ablim < 1") 
+           
+           } else {
+      
       scores_spec <- data.frame(scores(ord, display="species", choices=choices))
-
+      
       sig <- env$vectors$pvals
       scores_env <- data.frame(scores(env, display="vectors"))
-      scores_env <- scores_env[sig<0.05,]
-
+      scores_env <- scores_env[sig<p.max,]
+      
       if(nrow(scores_env) == 0) {
-
+        
         print("WARNING: No significant environmental variables. Only abundance limit used for selection.")
-
+        
         names(abund[abund >= quantile(abund, 1 - ablim)])
-
-      } else {
-
-        euclid<-data.frame(rdist(scores_spec, scores_env))
+        
+      } else if(nrow(scores_env) == 1) {
+        
+        euclid<-data.frame(fields::rdist(scores_spec, scores_env))
         names(euclid)<-rownames(scores_env)
         rownames(euclid)<-names(matrix)
-
+        rownames(data.frame(euclid[abund > quantile(abund, 1 - ablim) &
+                                     (euclid <= quantile(unlist(euclid), 0.5*fitlim) |
+                                        euclid >= quantile(unlist(euclid), 1-0.5*fitlim)), ,drop=FALSE]))
+        
+      } else {
+        
+        euclid<-data.frame(fields::rdist(scores_spec, scores_env))
+        names(euclid)<-rownames(scores_env)
+        rownames(euclid)<-names(matrix)
+        
         best_fit<-euclid[abund > quantile(abund, 1 - ablim) &
-                       (euclid <= quantile(unlist(euclid), 0.5*fitlim) |
-                       euclid >= quantile(unlist(euclid), 1-0.5*fitlim)),]
+                           (euclid <= quantile(unlist(euclid), 0.5*fitlim) |
+                              euclid >= quantile(unlist(euclid), 1-0.5*fitlim)),]
         rownames(best_fit[complete.cases(best_fit),])
+        
       }
-      }
-    }  else {
-      print("FATAL: Selected Method unknown")
+    }
+  }  else {
+    print("FATAL: Selected Method unknown")
   }
 }
+
 
 
 
